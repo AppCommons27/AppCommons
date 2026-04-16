@@ -320,7 +320,7 @@ async function fetchNews() {
     const res = await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':window._apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4000,tools:[{type:'web_search_20250305',name:'web_search'}],system:sys,messages:[{role:'user',content:`請搜尋並回傳今天${dateStr}最新的6則全球與北美汽車產業新聞，嚴格依照JSON格式。`}]})
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,tools:[{type:'web_search_20250305',name:'web_search'}],system:sys,messages:[{role:'user',content:`請搜尋並回傳今天${dateStr}最新的6則全球與北美汽車產業新聞，嚴格依照JSON格式。`}]})
     });
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${res.status}`);}
     const data=await res.json();
