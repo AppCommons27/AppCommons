@@ -142,7 +142,6 @@ function buildEmailHTML(topStories, summaryStories) {
 async function sendEmail(html) {
   const recipients = TO_EMAIL.split(',').map(e => e.trim());
 
-  // Build standalone HTML attachment (self-contained report)
   const attachmentHtml = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8">
 <title>Automotive Intelligence — ${dateLabel}</title>
@@ -179,12 +178,10 @@ async function sendEmail(html) {
 <div class="wrap">
   <h1>🚗 Automotive Intelligence Daily</h1>
   <p class="sub">${dateLabel} · Top stories by Claude AI · Summaries by NewsAPI</p>
-  ${html.replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<[^>]*style="[^"]*font-family[^"]*"[^>]*>/g, m => m).replace(/background:#0d0f12/g, '').replace(/max-width:680px/g, 'max-width:100%')}
   <div class="footer">Automotive Intelligence Daily · ${dateLabel} · Open in browser: <a href="https://appcommons27.github.io/AppCommons/automotive-intelligence.html">App ↗</a></div>
 </div>
 </body></html>`;
 
-  // Convert to base64
   const attachmentBase64 = Buffer.from(attachmentHtml).toString('base64');
 
   const res = await fetch('https://api.resend.com/emails', {
@@ -207,6 +204,115 @@ async function sendEmail(html) {
   return await res.json();
 }
 
+// ── Firebase Save ──
+async function getFirebaseToken() {
+  const FIREBASE_SERVICE_ACCOUNT = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  const { createSign } = await import('crypto');
+  const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+  const now = Math.floor(Date.now() / 1000);
+  const payload = Buffer.from(JSON.stringify({
+    iss: FIREBASE_SERVICE_ACCOUNT.client_email,
+    sub: FIREBASE_SERVICE_ACCOUNT.client_email,
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now, exp: now + 3600,
+    scope: 'https://www.googleapis.com/auth/datastore'
+  })).toString('base64url');
+  const sign = createSign('RSA-SHA256');
+  sign.update(`${header}.${payload}`);
+  const signature = sign.sign(FIREBASE_SERVICE_ACCOUNT.private_key, 'base64url');
+  const jwt = `${header}.${payload}.${signature}`;
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`
+  });
+  const data = await res.json();
+  return { token: data.access_token, projectId: FIREBASE_SERVICE_ACCOUNT.project_id };
+}
+
+async function saveToFirestore(topStories, summaryStories) {
+  console.log('Saving to Firestore...');
+  const { token, projectId } = await getFirebaseToken();
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/dailyNews/${dateStr}`;
+
+  const allNews = [
+    {
+      id: 1, region: 'global', type: topStories.global.type || 'new-car',
+      title: topStories.global.title, summary: topStories.global.summary,
+      source: topStories.global.source, sourceUrl: topStories.global.sourceUrl || '',
+      readMin: 5,
+      report: {
+        background: topStories.global.background,
+        keyPoints: topStories.global.keyPoints,
+        impact: topStories.global.impact,
+        cockpit: topStories.global.cockpit,
+        tags: topStories.global.tags
+      }
+    },
+    {
+      id: 2, region: 'na', type: topStories.na.type || 'new-car',
+      title: topStories.na.title, summary: topStories.na.summary,
+      source: topStories.na.source, sourceUrl: topStories.na.sourceUrl || '',
+      readMin: 5,
+      report: {
+        background: topStories.na.background,
+        keyPoints: topStories.na.keyPoints,
+        impact: topStories.na.impact,
+        cockpit: topStories.na.cockpit,
+        tags: topStories.na.tags
+      }
+    },
+    ...summaryStories.map((n, i) => ({
+      id: i + 3, region: n.region, type: 'new-car',
+      title: n.title, summary: n.summary,
+      source: n.source, sourceUrl: n.sourceUrl || '',
+      readMin: 3, report: null
+    }))
+  ];
+
+  const fields = {
+    date: { stringValue: dateStr },
+    savedAt: { stringValue: new Date().toISOString() },
+    news: {
+      arrayValue: {
+        values: allNews.map(n => ({
+          mapValue: {
+            fields: {
+              id: { integerValue: n.id },
+              region: { stringValue: n.region },
+              type: { stringValue: n.type },
+              title: { stringValue: n.title },
+              summary: { stringValue: n.summary },
+              source: { stringValue: n.source },
+              sourceUrl: { stringValue: n.sourceUrl },
+              readMin: { integerValue: n.readMin },
+              report: n.report ? {
+                mapValue: {
+                  fields: {
+                    background: { stringValue: n.report.background },
+                    impact: { stringValue: n.report.impact },
+                    cockpit: { stringValue: n.report.cockpit },
+                    keyPoints: { arrayValue: { values: n.report.keyPoints.map(p => ({ stringValue: p })) } },
+                    tags: { arrayValue: { values: n.report.tags.map(t => ({ stringValue: t })) } }
+                  }
+                }
+              } : { nullValue: null }
+            }
+          }
+        }))
+      }
+    }
+  };
+
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields })
+  });
+  if (!res.ok) { const e = await res.json(); throw new Error(JSON.stringify(e)); }
+  console.log(`✅ Saved ${allNews.length} articles to Firestore for ${dateStr}`);
+}
+
 async function main() {
   console.log(`[${dateStr}] Starting Automotive Intelligence Daily...`);
   const topStories = await fetchTopStories();
@@ -217,6 +323,7 @@ async function main() {
   const html = buildEmailHTML(topStories, summaryStories);
   const result = await sendEmail(html);
   console.log('✅ Email sent:', result.id);
+  await saveToFirestore(topStories, summaryStories);
 }
 
 main().catch(err => { console.error('❌ Error:', err.message); process.exit(1); });
