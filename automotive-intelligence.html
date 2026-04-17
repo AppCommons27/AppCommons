@@ -129,7 +129,6 @@
   </div>
   <div class="topbar-right">
     <span id="today-label"></span>
-
     <button class="btn" onclick="refresh()" id="btn-refresh" style="display:none">↻ Refresh</button>
     <img id="user-avatar" class="user-avatar" style="display:none" />
     <span id="user-name" style="font-size:12px;color:var(--text3);display:none;"></span>
@@ -180,11 +179,9 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
-  const auth = firebase.auth();
-  const db = firebase.firestore();
-  const provider = new firebase.auth.GoogleAuthProvider();
-
-
+const auth = firebase.auth();
+const db = firebase.firestore();
+const provider = new firebase.auth.GoogleAuthProvider();
 
 const STORAGE_KEY = 'automotive_intel_api_key';
 
@@ -202,7 +199,7 @@ if (savedKey) {
   document.getElementById('btn-skip').style.display = 'block';
 }
 
-firebase.auth().onAuthStateChanged( user => {
+firebase.auth().onAuthStateChanged(user => {
   currentUser = user;
   if (user) {
     document.getElementById('api-setup').style.display = 'none';
@@ -249,8 +246,6 @@ window.startWithoutLogin = () => {
   document.getElementById('api-setup').style.display = 'none';
   document.getElementById('main').style.display = 'block';
   document.getElementById('btn-refresh').style.display = 'block';
-  document.getElementById('btn-export-html').style.display = 'block';
-  document.getElementById('btn-export-pdf').style.display = 'block';
   fetchNews();
 };
 
@@ -329,6 +324,7 @@ async function fetchNews() {
       const newsValues = data.fields?.news?.arrayValue?.values || [];
       const newsItems = newsValues.map(v => {
         const f = v.mapValue.fields;
+        const rf = f.report?.mapValue?.fields;
         return {
           id: parseInt(f.id?.integerValue || 0),
           region: f.region?.stringValue || 'global',
@@ -338,7 +334,13 @@ async function fetchNews() {
           source: f.source?.stringValue || '',
           sourceUrl: f.sourceUrl?.stringValue || '',
           readMin: parseInt(f.readMin?.integerValue || 3),
-          report: null
+          report: rf ? {
+            background: rf.background?.stringValue || '',
+            impact: rf.impact?.stringValue || '',
+            cockpit: rf.cockpit?.stringValue || '',
+            keyPoints: rf.keyPoints?.arrayValue?.values?.map(v => v.stringValue) || [],
+            tags: rf.tags?.arrayValue?.values?.map(v => v.stringValue) || []
+          } : null
         };
       });
       if (newsItems.length > 0) {
@@ -347,18 +349,10 @@ async function fetchNews() {
         return;
       }
     }
-    // Fallback message if no news yet
     document.getElementById('content').innerHTML = `<div class="error-msg"><p>Today's news hasn't been fetched yet.</p><div class="error-detail">News is fetched automatically every day at 8AM Taiwan time. Check back later!</div></div>`;
   } catch(e) {
     document.getElementById('content').innerHTML=`<div class="error-msg"><p>⚠️ Failed to load news.</p><div class="error-detail">${e.message}</div></div>`;
   }
-}
-
-function detectType(text) {
-  const t = text.toLowerCase();
-  if (t.includes('design')||t.includes('concept')||t.includes('style')||t.includes('reveal')) return 'design';
-  if (t.includes('platform')||t.includes('software')||t.includes('sdv')||t.includes('adas')||t.includes('electric')||t.includes('battery')) return 'arch';
-  return 'new-car';
 }
 
 window.deepAnalysis = async function(id) {
@@ -367,7 +361,11 @@ window.deepAnalysis = async function(id) {
   const panel = document.getElementById(`report-${id}`);
   const card = latestNews.find(n=>n.id===id);
   if (!card) return;
-  if (card.report) { panel.classList.toggle('open'); document.getElementById(`card-${id}`)?.classList.toggle('expanded'); return; }
+  if (card.report) {
+    panel.classList.toggle('open');
+    document.getElementById(`card-${id}`)?.classList.toggle('expanded');
+    return;
+  }
   btn.textContent='Analyzing...'; btn.disabled=true;
   panel.innerHTML=`<div style="padding:1rem;text-align:center;"><div class="spinner" style="margin:0 auto 8px;"></div><div style="font-size:12px;color:var(--text3);font-family:var(--mono);">Claude is analyzing this article (~15s)...</div></div>`;
   panel.classList.add('open'); document.getElementById(`card-${id}`)?.classList.add('expanded');
@@ -394,7 +392,7 @@ window.deepAnalysis = async function(id) {
       <div class="report-block"><div class="rblock-label">Industry Impact</div><div class="rblock-text">${report.impact}</div></div>
       <div class="report-block full"><div class="rblock-label">Smart Cockpit Opportunity</div><div class="rblock-text">${report.cockpit}</div></div>
     </div><div class="tags-row">${tags}</div>`;
-        btn.textContent='✓ Analyzed'; btn.style.color='var(--accent)'; btn.disabled=false;
+    btn.textContent='✓ Analyzed'; btn.style.color='var(--accent)'; btn.disabled=false;
   } catch(e) {
     panel.innerHTML=`<div style="padding:1rem;font-size:13px;color:var(--coral);">Analysis failed: ${e.message}</div>`;
     btn.textContent='Deep Analysis ↓'; btn.disabled=false;
@@ -425,13 +423,16 @@ function cHTML(n){
       <div class="report-block"><div class="rblock-label">Industry Impact</div><div class="rblock-text">${n.report.impact}</div></div>
       <div class="report-block full"><div class="rblock-label">Smart Cockpit Opportunity</div><div class="rblock-text">${n.report.cockpit}</div></div>
     </div><div class="tags-row">${tags}</div>` : '';
+  const analyzeBtn = hasReport
+    ? `<button id="analyze-btn-${n.id}" onclick="event.stopPropagation();deepAnalysis(${n.id})" style="font-size:11px;padding:4px 10px;border:1px solid rgba(255,255,255,0.13);border-radius:6px;background:transparent;color:var(--accent);cursor:pointer;font-family:inherit;">✓ Analysis ↓</button>`
+    : `<button id="analyze-btn-${n.id}" onclick="event.stopPropagation();deepAnalysis(${n.id})" style="font-size:11px;padding:4px 10px;border:1px solid rgba(255,255,255,0.13);border-radius:6px;background:transparent;color:#8a8fa8;cursor:pointer;font-family:inherit;">Deep Analysis ↓</button>`;
   return `<div class="news-card" id="card-${n.id}" onclick="toggle(${n.id})">
     <div class="card-main">
       <div class="card-top"><div class="badges"><span class="badge ${RB[n.region]||'b-global'}">${RL[n.region]||n.region}</span><span class="badge ${TB[n.type]||'b-newcar'}">${TL[n.type]||n.type}</span></div><span class="read-time">${n.readMin} min</span></div>
       <div class="card-title">${n.title}</div>
       <div class="card-summary">${n.summary}</div>
       <div class="card-footer">${n.sourceUrl ? `<a href="${n.sourceUrl}" target="_blank" style="font-size:11px;color:var(--blue);font-family:var(--mono);text-decoration:none;" onclick="event.stopPropagation()">${n.source} ↗</a>` : `<span class="card-source">${n.source}</span>`}
-        <button id="analyze-btn-${n.id}" onclick="event.stopPropagation();deepAnalysis(${n.id})" style="font-size:11px;padding:4px 10px;border:1px solid rgba(255,255,255,0.13);border-radius:6px;background:transparent;color:#8a8fa8;cursor:pointer;font-family:inherit;">Deep Analysis ↓</button>
+        ${analyzeBtn}
       </div>
     </div>
     <div class="report-panel" id="report-${n.id}">${reportContent}</div>
@@ -450,13 +451,8 @@ window.toggle=(id)=>{
 
 document.getElementById('api-key-input').addEventListener('keydown',e=>{if(e.key==='Enter')window.saveKey();});
 
-
-// ── EXPORT FUNCTIONS ──
 let latestNews = [];
 
-
-
-// Run after page loads
 setTimeout(handleUrlParams, 500);
 </script>
 </body>
