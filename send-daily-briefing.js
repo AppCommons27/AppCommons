@@ -14,7 +14,7 @@ const dateLabel = today.toLocaleDateString('en-US', { year:'numeric', month:'lon
 async function fetchTopStories() {
   console.log('Stage 1: Claude searching for top stories...');
   const sys = `You are a senior automotive industry analyst focused on Smart Cockpit. Search today (${dateStr}) and find the single most important automotive news for Global and for North America. Return JSON only:
-{"global":{"titleEn":"...","summaryEn":"...","source":"...","sourceUrl":"...","type":"new-car","backgroundEn":"60-80w","backgroundZh":"60-80字","keyPointsEn":["p1","p2","p3"],"keyPointsZh":["重點一","重點二","重點三"],"impactEn":"50-70w","impactZh":"50-70字","cockpitEn":"40-60w","cockpitZh":"40-60字","tags":["high"]},"na":{"titleEn":"...","summaryEn":"...","source":"...","sourceUrl":"...","type":"new-car","backgroundEn":"60-80w","backgroundZh":"60-80字","keyPointsEn":["p1","p2","p3"],"keyPointsZh":["重點一","重點二","重點三"],"impactEn":"50-70w","impactZh":"50-70字","cockpitEn":"40-60w","cockpitZh":"40-60字","tags":["high"]}}
+{"global":{"title":"...","summary":"...","source":"...","sourceUrl":"...","type":"new-car","background":"60-80w","keyPoints":["p1","p2","p3"],"impact":"50-70w","cockpit":"40-60w","tags":["high"]},"na":{"title":"...","summary":"...","source":"...","sourceUrl":"...","type":"new-car","background":"60-80w","keyPoints":["p1","p2","p3"],"impact":"50-70w","cockpit":"40-60w","tags":["high"]}}
 type: new-car/arch/design. tags: high/mid/watch. JSON only.`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -49,8 +49,8 @@ async function fetchSummaryStories(excludeUrls = []) {
     seen.add(a.url); return true;
   }).slice(0, 4).map((a, i) => ({
     region: i < 2 ? 'global' : 'na',
-    titleEn: a.title.length > 90 ? a.title.substring(0, 90) + '...' : a.title,
-    summaryEn: a.description ? a.description.substring(0, 180) : '',
+    title: a.title.length > 90 ? a.title.substring(0, 90) + '...' : a.title,
+    summary: a.description ? a.description.substring(0, 180) : '',
     source: a.source?.name || 'News',
     sourceUrl: a.url
   }));
@@ -64,8 +64,7 @@ function buildEmailHTML(topStories, summaryStories) {
   function topCard(n, regionLabel, regionColor, regionBg) {
     const tags = (n.tags || []).map(t => `<span style="font-size:11px;padding:2px 8px;border-radius:20px;background:${tagColor[t]}22;color:${tagColor[t]};border:1px solid ${tagColor[t]}44;font-family:monospace;">${tagLabel[t] || t}</span>`).join(' ');
     const srcLink = n.sourceUrl ? `<a href="${n.sourceUrl}" style="color:#4a9eff;font-size:11px;font-family:monospace;text-decoration:none;">${n.source} ↗</a>` : `<span style="font-size:11px;color:#888;">${n.source}</span>`;
-    const ptsEn = (n.keyPointsEn || []).map(p => `<li style="margin:4px 0;font-size:13px;color:#8a8fa8;line-height:1.6;">${p}</li>`).join('');
-    const ptsZh = (n.keyPointsZh || []).map(p => `<li style="margin:3px 0;font-size:12px;color:#555b72;line-height:1.6;">${p}</li>`).join('');
+    const pts = (n.keyPoints || []).map(p => `<li style="margin:4px 0;font-size:13px;color:#8a8fa8;line-height:1.6;">${p}</li>`).join('');
     return `
 <div style="background:#151820;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:20px;margin-bottom:16px;">
   <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
@@ -73,29 +72,25 @@ function buildEmailHTML(topStories, summaryStories) {
     <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(155,127,232,0.12);color:#9b7fe8;border:1px solid rgba(155,127,232,0.2);font-family:monospace;">${typeLabel[n.type] || n.type}</span>
     <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:rgba(31,206,138,0.1);color:#1fce8a;font-family:monospace;">★ Top Story</span>
   </div>
-  <h3 style="font-size:15px;font-weight:500;color:#e8eaf0;margin:0 0 8px;line-height:1.5;">${n.titleEn}</h3>
-  <p style="font-size:13px;color:#8a8fa8;margin:0 0 16px;line-height:1.6;">${n.summaryEn}</p>
+  <h3 style="font-size:15px;font-weight:500;color:#e8eaf0;margin:0 0 8px;line-height:1.5;">${n.title}</h3>
+  <p style="font-size:13px;color:#8a8fa8;margin:0 0 16px;line-height:1.6;">${n.summary}</p>
   <div style="background:#1c2030;border-radius:8px;padding:14px;margin-bottom:10px;">
-    <div style="font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:#555b72;font-family:monospace;margin-bottom:8px;">Background / 背景</div>
-    <p style="font-size:13px;color:#8a8fa8;margin:0 0 6px;line-height:1.7;">${n.backgroundEn}</p>
-    <p style="font-size:12px;color:#555b72;margin:0;line-height:1.7;">${n.backgroundZh || ''}</p>
+    <div style="font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:#555b72;font-family:monospace;margin-bottom:8px;">Background</div>
+    <p style="font-size:13px;color:#8a8fa8;margin:0;line-height:1.7;">${n.background}</p>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
     <div style="background:#1c2030;border-radius:8px;padding:14px;">
-      <div style="font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:#555b72;font-family:monospace;margin-bottom:6px;">Key Points / 重點</div>
-      <ul style="margin:0;padding-left:16px;">${ptsEn}</ul>
-      <ul style="margin:6px 0 0;padding-left:16px;opacity:0.7;">${ptsZh}</ul>
+      <div style="font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:#555b72;font-family:monospace;margin-bottom:6px;">Key Points</div>
+      <ul style="margin:0;padding-left:16px;">${pts}</ul>
     </div>
     <div style="background:#1c2030;border-radius:8px;padding:14px;">
-      <div style="font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:#555b72;font-family:monospace;margin-bottom:6px;">Industry Impact / 影響</div>
-      <p style="font-size:13px;color:#8a8fa8;margin:0 0 6px;line-height:1.7;">${n.impactEn}</p>
-      <p style="font-size:12px;color:#555b72;margin:0;line-height:1.7;">${n.impactZh || ''}</p>
+      <div style="font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:#555b72;font-family:monospace;margin-bottom:6px;">Industry Impact</div>
+      <p style="font-size:13px;color:#8a8fa8;margin:0;line-height:1.7;">${n.impact}</p>
     </div>
   </div>
   <div style="background:#1c2030;border-radius:8px;padding:14px;margin-bottom:12px;">
-    <div style="font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:#555b72;font-family:monospace;margin-bottom:6px;">Smart Cockpit Opportunity / 商機</div>
-    <p style="font-size:13px;color:#8a8fa8;margin:0 0 6px;line-height:1.7;">${n.cockpitEn}</p>
-    <p style="font-size:12px;color:#555b72;margin:0;line-height:1.7;">${n.cockpitZh || ''}</p>
+    <div style="font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:#555b72;font-family:monospace;margin-bottom:6px;">Smart Cockpit Opportunity</div>
+    <p style="font-size:13px;color:#8a8fa8;margin:0;line-height:1.7;">${n.cockpit}</p>
   </div>
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">${srcLink}<div>${tags}</div></div>
 </div>`;
@@ -103,14 +98,14 @@ function buildEmailHTML(topStories, summaryStories) {
 
   function summaryCard(n, regionLabel, regionColor, regionBg) {
     const srcLink = n.sourceUrl ? `<a href="${n.sourceUrl}" style="color:#4a9eff;font-size:11px;font-family:monospace;text-decoration:none;">${n.source} ↗</a>` : `<span style="font-size:11px;color:#888;">${n.source}</span>`;
-    const appUrl = `https://appcommons27.github.io/AppCommons/automotive-intelligence.html?analyze=1&url=${encodeURIComponent(n.sourceUrl||'')}&title=${encodeURIComponent(n.titleEn)}&summary=${encodeURIComponent(n.summaryEn)}&source=${encodeURIComponent(n.source)}`;
+    const appUrl = `https://appcommons27.github.io/AppCommons/automotive-intelligence.html?analyze=1&url=${encodeURIComponent(n.sourceUrl||'')}&title=${encodeURIComponent(n.title)}&summary=${encodeURIComponent(n.summary)}&source=${encodeURIComponent(n.source)}`;
     return `
 <div style="background:#151820;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:16px;margin-bottom:10px;">
   <div style="display:flex;gap:8px;margin-bottom:8px;">
     <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${regionBg};color:${regionColor};border:1px solid ${regionColor}33;font-family:monospace;">${regionLabel}</span>
   </div>
-  <h4 style="font-size:14px;font-weight:500;color:#e8eaf0;margin:0 0 6px;line-height:1.5;">${n.titleEn}</h4>
-  <p style="font-size:12px;color:#8a8fa8;margin:0 0 10px;line-height:1.6;">${n.summaryEn}</p>
+  <h4 style="font-size:14px;font-weight:500;color:#e8eaf0;margin:0 0 6px;line-height:1.5;">${n.title}</h4>
+  <p style="font-size:12px;color:#8a8fa8;margin:0 0 10px;line-height:1.6;">${n.summary}</p>
   <div style="display:flex;align-items:center;justify-content:space-between;">${srcLink}<a href="${appUrl}" style="font-size:11px;color:#1fce8a;text-decoration:none;font-family:monospace;">Deep analysis in app ↗</a></div>
 </div>`;
   }
@@ -131,10 +126,10 @@ function buildEmailHTML(topStories, summaryStories) {
     </div>
   </div>
   <p style="font-size:13px;color:#555b72;margin:0 0 28px;border-bottom:1px solid rgba(255,255,255,0.07);padding-bottom:16px;">Top stories powered by Claude AI · Additional summaries by NewsAPI</p>
-  <h2 style="font-size:11px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:#555b72;margin:0 0 16px;font-family:monospace;">★ TOP STORIES · 精選重點</h2>
+  <h2 style="font-size:11px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:#555b72;margin:0 0 16px;font-family:monospace;">★ TOP STORIES</h2>
   ${topCard(topStories.global, 'Global · 全球', '#1fce8a', 'rgba(31,206,138,0.12)')}
   ${topCard(topStories.na, 'North America · 北美', '#4a9eff', 'rgba(74,158,255,0.12)')}
-  <h2 style="font-size:11px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:#555b72;margin:24px 0 16px;border-top:1px solid rgba(255,255,255,0.07);padding-top:20px;font-family:monospace;">MORE NEWS · 更多新聞</h2>
+  <h2 style="font-size:11px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:#555b72;margin:24px 0 16px;border-top:1px solid rgba(255,255,255,0.07);padding-top:20px;font-family:monospace;">MORE NEWS</h2>
   ${globalSummaries.map(n => summaryCard(n, 'Global · 全球', '#1fce8a', 'rgba(31,206,138,0.12)')).join('')}
   ${naSummaries.map(n => summaryCard(n, 'North America · 北美', '#4a9eff', 'rgba(74,158,255,0.12)')).join('')}
   <div style="margin-top:32px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.07);text-align:center;">
@@ -158,7 +153,7 @@ async function sendEmail(html) {
 async function main() {
   console.log(`[${dateStr}] Starting Automotive Intelligence Daily...`);
   const topStories = await fetchTopStories();
-  console.log(`Top: Global="${topStories.global?.titleEn?.substring(0,40)}" NA="${topStories.na?.titleEn?.substring(0,40)}"`);
+  console.log(`Top: Global="${topStories.global?.title?.substring(0,40)}" NA="${topStories.na?.title?.substring(0,40)}"`);
   const excludeUrls = [topStories.global?.sourceUrl, topStories.na?.sourceUrl].filter(Boolean);
   const summaryStories = await fetchSummaryStories(excludeUrls);
   console.log(`Summaries: ${summaryStories.length}`);

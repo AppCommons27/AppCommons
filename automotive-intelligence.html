@@ -129,7 +129,7 @@
   </div>
   <div class="topbar-right">
     <span id="today-label"></span>
-    <button class="btn" id="btn-lang" onclick="toggleLang()" style="font-family:var(--mono);min-width:52px;">中文</button>
+
     <button class="btn" onclick="exportHTML()" id="btn-export-html" style="display:none">⬇ Email</button>
     <button class="btn" onclick="exportPDF()" id="btn-export-pdf" style="display:none">⬇ PDF</button>
     <button class="btn" onclick="refresh()" id="btn-refresh" style="display:none">↻ Refresh</button>
@@ -374,7 +374,7 @@ window.deepAnalysis = async function(id) {
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':window._apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,
-        system:`You are a senior automotive industry analyst focused on Smart Cockpit. Analyze this news and return JSON only: {"backgroundEn":"60-80w","backgroundZh":"60-80字","keyPointsEn":["p1","p2","p3"],"keyPointsZh":["重點一","重點二","重點三"],"impactEn":"50-70w","impactZh":"50-70字","cockpitEn":"40-60w","cockpitZh":"40-60字","tags":["high"]} tags from high/mid/watch. JSON only.`,
+        system:`You are a senior automotive industry analyst focused on Smart Cockpit. Analyze this news and return JSON only: {"background":"60-80w","keyPoints":["p1","p2","p3"],"impact":"50-70w","cockpit":"40-60w","tags":["high"]} tags from high/mid/watch. JSON only.`,
         messages:[{role:'user',content:`Analyze: Title: ${card.titleEn}\nSummary: ${card.summaryEn}\nSource: ${card.source}`}]})
     });
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${res.status}`);}
@@ -384,14 +384,13 @@ window.deepAnalysis = async function(id) {
     const report=JSON.parse(clean.substring(clean.indexOf('{'),clean.lastIndexOf('}')+1));
     card.report=report;
     const tagLabel={high:'High Impact',mid:'Mid Impact',watch:'Watch'};
-    const ptsEn=(report.keyPointsEn||[]).map(p=>`<li>${p}</li>`).join('');
-    const ptsZh=(report.keyPointsZh||[]).map(p=>`<li>${p}</li>`).join('');
+    const pts=(report.keyPoints||[]).map(p=>`<li>${p}</li>`).join('');
     const tags=(report.tags||[]).map(t=>`<span class="tag-${t}">${tagLabel[t]||t}</span>`).join(' ');
     panel.innerHTML=`<div class="report-grid">
-      <div class="report-block full"><div class="rblock-label">Background</div><div class="rblock-text lang-en">${report.backgroundEn}</div><div class="rblock-text lang-zh" style="display:none;">${report.backgroundZh}</div></div>
-      <div class="report-block"><div class="rblock-label">Key Points</div><ul class="rblock-points lang-en">${ptsEn}</ul><ul class="rblock-points lang-zh" style="display:none;">${ptsZh}</ul></div>
-      <div class="report-block"><div class="rblock-label">Industry Impact</div><div class="rblock-text lang-en">${report.impactEn}</div><div class="rblock-text lang-zh" style="display:none;">${report.impactZh}</div></div>
-      <div class="report-block full"><div class="rblock-label">Smart Cockpit Opportunity</div><div class="rblock-text lang-en">${report.cockpitEn}</div><div class="rblock-text lang-zh" style="display:none;">${report.cockpitZh}</div></div>
+      <div class="report-block full"><div class="rblock-label">Background</div><div class="rblock-text">${report.background}</div></div>
+      <div class="report-block"><div class="rblock-label">Key Points</div><ul class="rblock-points">${pts}</ul></div>
+      <div class="report-block"><div class="rblock-label">Industry Impact</div><div class="rblock-text">${report.impact}</div></div>
+      <div class="report-block full"><div class="rblock-label">Smart Cockpit Opportunity</div><div class="rblock-text">${report.cockpit}</div></div>
     </div><div class="tags-row">${tags}</div>`;
     applyLang();
     btn.textContent='✓ Analyzed'; btn.style.color='var(--accent)'; btn.disabled=false;
@@ -420,9 +419,9 @@ function cHTML(n){
   return `<div class="news-card" id="card-${n.id}" onclick="toggle(${n.id})">
     <div class="card-main">
       <div class="card-top"><div class="badges"><span class="badge ${RB[n.region]||'b-global'}">${RL[n.region]||n.region}</span><span class="badge ${TB[n.type]||'b-newcar'}">${TL[n.type]||n.type}</span></div><span class="read-time">${n.readMin} min</span></div>
-      <div class="card-title lang-en">${n.titleEn||n.title}</div>
+      <div class="card-title ">${n.titleEn||n.title}</div>
       <div class="card-title lang-zh" style="font-size:13px;font-weight:400;color:var(--text2);margin-top:2px;margin-bottom:5px;display:none;">${n.titleZh||n.title||''}</div>
-      <div class="card-summary lang-en">${n.summaryEn||n.summary}</div>
+      <div class="card-summary ">${n.summaryEn||n.summary}</div>
       <div class="card-summary lang-zh" style="color:var(--text3);font-size:12px;margin-top:3px;display:none;">${n.summaryZh||n.summary||''}</div>
       <div class="card-footer">${n.sourceUrl ? `<a href="${n.sourceUrl}" target="_blank" style="font-size:11px;color:var(--blue);font-family:var(--mono);text-decoration:none;" onclick="event.stopPropagation()">${n.source} ↗</a>` : `<span class="card-source">${n.source}</span>`}
         <button id="analyze-btn-${n.id}" onclick="event.stopPropagation();deepAnalysis(${n.id})" style="font-size:11px;padding:4px 10px;border:1px solid rgba(255,255,255,0.13);border-radius:6px;background:transparent;color:#8a8fa8;cursor:pointer;font-family:inherit;">Deep Analysis ↓</button>
@@ -651,10 +650,10 @@ function applyLang() {
   });
 
   // Show/hide bilingual blocks
-  document.querySelectorAll('.lang-en').forEach(el => el.style.display = isZh ? 'none' : 'block');
-  document.querySelectorAll('.lang-zh').forEach(el => el.style.display = isZh ? 'block' : 'none');
-  document.querySelectorAll('.lang-en-inline').forEach(el => el.style.display = isZh ? 'none' : '');
-  document.querySelectorAll('.lang-zh-inline').forEach(el => el.style.display = isZh ? '' : 'none');
+  
+  
+  
+  
 
   // Tab labels
   document.getElementById('tab-today').textContent = isZh ? '今日新聞' : 'Today';
@@ -727,8 +726,7 @@ async function handleUrlParams() {
     const report = JSON.parse(clean.substring(clean.indexOf('{'), clean.lastIndexOf('}') + 1));
 
     const tagLabel = { high: 'High Impact', mid: 'Mid Impact', watch: 'Watch' };
-    const ptsEn = (report.keyPointsEn || []).map(p => `<li>${p}</li>`).join('');
-    const ptsZh = (report.keyPointsZh || []).map(p => `<li>${p}</li>`).join('');
+    const pts2 = (report.keyPoints || []).map(p => `<li>${p}</li>`).join('');
     const tags = (report.tags || []).map(t => `<span class="tag-${t}">${tagLabel[t] || t}</span>`).join(' ');
     const srcLink = articleUrl ? `<a href="${articleUrl}" target="_blank" style="font-size:11px;color:var(--blue);font-family:var(--mono);text-decoration:none;">${articleSource} ↗</a>` : '';
 
@@ -742,10 +740,10 @@ async function handleUrlParams() {
         </div>
         <div style="padding:1.25rem;background:var(--surface2);">
           <div class="report-grid">
-            <div class="report-block full"><div class="rblock-label">Background</div><div class="rblock-text lang-en">${report.backgroundEn}</div><div class="rblock-text lang-zh" style="display:none;">${report.backgroundZh}</div></div>
-            <div class="report-block"><div class="rblock-label">Key Points</div><ul class="rblock-points lang-en">${ptsEn}</ul><ul class="rblock-points lang-zh" style="display:none;">${ptsZh}</ul></div>
-            <div class="report-block"><div class="rblock-label">Industry Impact</div><div class="rblock-text lang-en">${report.impactEn}</div><div class="rblock-text lang-zh" style="display:none;">${report.impactZh}</div></div>
-            <div class="report-block full"><div class="rblock-label">Smart Cockpit Opportunity</div><div class="rblock-text lang-en">${report.cockpitEn}</div><div class="rblock-text lang-zh" style="display:none;">${report.cockpitZh}</div></div>
+            <div class="report-block full"><div class="rblock-label">Background</div><div class="rblock-text">${report.background}</div></div>
+            <div class="report-block"><div class="rblock-label">Key Points</div><ul class="rblock-points">${pts2}</ul></div>
+            <div class="report-block"><div class="rblock-label">Industry Impact</div><div class="rblock-text">${report.impact}</div></div>
+            <div class="report-block full"><div class="rblock-label">Smart Cockpit Opportunity</div><div class="rblock-text">${report.cockpit}</div></div>
           </div>
           <div class="tags-row" style="margin-top:12px;">${tags}</div>
         </div>
