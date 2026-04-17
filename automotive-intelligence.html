@@ -415,28 +415,26 @@ function sHTML(label,dot,items){
 }
 
 function cHTML(n){
-  const tags=(n.report.tags||[]).map(t=>t==='high'?`<span class="tag-high">高影響</span>`:t==='mid'?`<span class="tag-mid">中影響</span>`:`<span class="tag-watch">持續觀察</span>`).join('');
-  const pts=Array.isArray(n.report.keyPoints)?n.report.keyPoints.map(p=>`<li>${p}</li>`).join(''):String(n.report.keyPoints).split('・').filter(Boolean).map(p=>`<li>${p.trim()}</li>`).join('');
+  const hasReport = n.report && typeof n.report === 'object';
+  const tags = hasReport ? (n.report.tags||[]).map(t=>t==='high'?`<span class="tag-high">高影響</span>`:t==='mid'?`<span class="tag-mid">中影響</span>`:`<span class="tag-watch">持續觀察</span>`).join('') : '';
+  const pts = hasReport ? (Array.isArray(n.report.keyPoints)?n.report.keyPoints.map(p=>`<li>${p}</li>`).join(''):String(n.report.keyPoints).split('・').filter(Boolean).map(p=>`<li>${p.trim()}</li>`).join('')) : '';
+  const reportContent = hasReport ? `
+    <div class="report-grid">
+      <div class="report-block full"><div class="rblock-label">Background</div><div class="rblock-text">${n.report.background}</div></div>
+      <div class="report-block"><div class="rblock-label">Key Points</div><ul class="rblock-points">${pts}</ul></div>
+      <div class="report-block"><div class="rblock-label">Industry Impact</div><div class="rblock-text">${n.report.impact}</div></div>
+      <div class="report-block full"><div class="rblock-label">Smart Cockpit Opportunity</div><div class="rblock-text">${n.report.cockpit}</div></div>
+    </div><div class="tags-row">${tags}</div>` : '';
   return `<div class="news-card" id="card-${n.id}" onclick="toggle(${n.id})">
     <div class="card-main">
       <div class="card-top"><div class="badges"><span class="badge ${RB[n.region]||'b-global'}">${RL[n.region]||n.region}</span><span class="badge ${TB[n.type]||'b-newcar'}">${TL[n.type]||n.type}</span></div><span class="read-time">${n.readMin} min</span></div>
-      <div class="card-title ">${n.titleEn||n.title}</div>
-      <div class="card-title lang-zh" style="font-size:13px;font-weight:400;color:var(--text2);margin-top:2px;margin-bottom:5px;display:none;">${n.titleZh||n.title||''}</div>
-      <div class="card-summary ">${n.summaryEn||n.summary}</div>
-      <div class="card-summary lang-zh" style="color:var(--text3);font-size:12px;margin-top:3px;display:none;">${n.summaryZh||n.summary||''}</div>
+      <div class="card-title">${n.title}</div>
+      <div class="card-summary">${n.summary}</div>
       <div class="card-footer">${n.sourceUrl ? `<a href="${n.sourceUrl}" target="_blank" style="font-size:11px;color:var(--blue);font-family:var(--mono);text-decoration:none;" onclick="event.stopPropagation()">${n.source} ↗</a>` : `<span class="card-source">${n.source}</span>`}
         <button id="analyze-btn-${n.id}" onclick="event.stopPropagation();deepAnalysis(${n.id})" style="font-size:11px;padding:4px 10px;border:1px solid rgba(255,255,255,0.13);border-radius:6px;background:transparent;color:#8a8fa8;cursor:pointer;font-family:inherit;">Deep Analysis ↓</button>
       </div>
     </div>
-    <div class="report-panel" id="report-${n.id}">
-      <div class="report-grid">
-        <div class="report-block full"><div class="rblock-label">Background</div><div class="rblock-text">${n.report.background}</div></div>
-        <div class="report-block"><div class="rblock-label">Key Points</div><ul class="rblock-points">${pts}</ul></div>
-        <div class="report-block"><div class="rblock-label">Industry Impact</div><div class="rblock-text">${n.report.impact}</div></div>
-        <div class="report-block full"><div class="rblock-label">Smart Cockpit Opportunity</div><div class="rblock-text">${n.report.cockpit}</div></div>
-      </div>
-      <div class="tags-row">${tags}</div>
-    </div>
+    <div class="report-panel" id="report-${n.id}">${reportContent}</div>
   </div>`;
 }
 
