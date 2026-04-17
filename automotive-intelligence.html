@@ -317,37 +317,40 @@ const RL={global:'全球',na:'北美'};
 const TB={'new-car':'b-newcar',arch:'b-arch',design:'b-design'};
 const TL={'new-car':'新車',arch:'新架構',design:'新設計'};
 
-const NEWS_API_KEY = '64467d00422a487e83ead23a128b0116';
-
-window.refresh = fetchNews;
-
 async function fetchNews() {
-  document.getElementById('content').innerHTML = `<div class="loading-wrap"><div class="spinner"></div><div class="loading-text">Fetching today's automotive news...</div><div style="font-size:11px;color:var(--text3);margin-top:6px;font-family:var(--mono);">Free · Fast · Click any article to deep analyze with Claude</div></div>`;
+  document.getElementById('content').innerHTML = `<div class="loading-wrap"><div class="spinner"></div><div class="loading-text">Loading today's automotive news...</div></div>`;
   try {
-    const queries = ['automotive electric vehicle new car 2026','automotive software cockpit infotainment ADAS','North America auto industry Ford GM Tesla Stellantis'];
-    const allArticles = [];
-    for (const q of queries) {
-      const res = await fetch(`https://newsapi.org/v2/everything?q=${encodeURIComponent(q)}&language=en&sortBy=publishedAt&pageSize=5&apiKey=${NEWS_API_KEY}`);
-      if (res.ok) { const d = await res.json(); if (d.articles) allArticles.push(...d.articles); }
+    const projectId = 'automotive-intelligence-a8a0f';
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/dailyNews/${dateStr}`;
+    const res = await fetch(url);
+
+    if (res.ok) {
+      const data = await res.json();
+      const newsValues = data.fields?.news?.arrayValue?.values || [];
+      const newsItems = newsValues.map(v => {
+        const f = v.mapValue.fields;
+        return {
+          id: parseInt(f.id?.integerValue || 0),
+          region: f.region?.stringValue || 'global',
+          type: f.type?.stringValue || 'new-car',
+          title: f.title?.stringValue || '',
+          summary: f.summary?.stringValue || '',
+          source: f.source?.stringValue || '',
+          sourceUrl: f.sourceUrl?.stringValue || '',
+          readMin: parseInt(f.readMin?.integerValue || 3),
+          report: null
+        };
+      });
+      if (newsItems.length > 0) {
+        renderNews(newsItems);
+        saveToHistory(newsItems);
+        return;
+      }
     }
-    const seen = new Set();
-    const filtered = allArticles.filter(a => {
-      if (!a.title || a.title==='[Removed]' || !a.description) return false;
-      if (seen.has(a.url)) return false;
-      seen.add(a.url); return true;
-    }).slice(0, 6);
-    if (!filtered.length) throw new Error('No articles found');
-    const newsItems = filtered.map((a,i) => ({
-      id: i+1, region: i<3?'global':'na',
-      type: detectType(a.title+' '+(a.description||'')),
-      titleEn: a.title.length>90?a.title.substring(0,90)+'...':a.title,
-      titleZh:'', summaryEn: a.description?a.description.substring(0,200):'-', summaryZh:'',
-      source: a.source?.name||'News', sourceUrl: a.url, readMin:3, report:null
-    }));
-    renderNews(newsItems);
-    saveToHistory(newsItems);
+    // Fallback message if no news yet
+    document.getElementById('content').innerHTML = `<div class="error-msg"><p>Today's news hasn't been fetched yet.</p><div class="error-detail">News is fetched automatically every day at 8AM Taiwan time. Check back later!</div></div>`;
   } catch(e) {
-    document.getElementById('content').innerHTML=`<div class="error-msg"><p>⚠️ Failed to load news. Please refresh.</p><div class="error-detail">${e.message}</div></div>`;
+    document.getElementById('content').innerHTML=`<div class="error-msg"><p>⚠️ Failed to load news.</p><div class="error-detail">${e.message}</div></div>`;
   }
 }
 
@@ -374,7 +377,7 @@ window.deepAnalysis = async function(id) {
       headers:{'Content-Type':'application/json','x-api-key':window._apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,
         system:`You are a senior automotive industry analyst focused on Smart Cockpit. Analyze this news and return JSON only: {"background":"60-80w","keyPoints":["p1","p2","p3"],"impact":"50-70w","cockpit":"40-60w","tags":["high"]} tags from high/mid/watch. JSON only.`,
-        messages:[{role:'user',content:`Analyze: Title: ${card.titleEn}\nSummary: ${card.summaryEn}\nSource: ${card.source}`}]})
+        messages:[{role:'user',content:`Analyze: Title: ${card.title}\nSummary: ${card.summary}\nSource: ${card.source}`}]})
     });
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${res.status}`);}
     const data=await res.json();
