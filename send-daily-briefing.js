@@ -49,11 +49,17 @@ async function fetchSummaryStories(excludeUrls = []) {
     const res = await fetch(`https://newsapi.org/v2/everything?q=${encodeURIComponent(q)}&language=en&sortBy=publishedAt&pageSize=6&apiKey=${NEWS_API_KEY}`);
     if (res.ok) { const d = await res.json(); if (d.articles) allArticles.push(...d.articles); }
   }
+  const automotiveKeywords = ['car', 'auto', 'vehicle', 'ev', 'electric', 'cockpit',
+    'infotainment', 'hmi', 'adas', 'sdv', 'oem', 'toyota', 'ford', 'gm', 'tesla',
+    'rivian', 'bmw', 'volkswagen', 'hyundai', 'kia', 'stellantis', 'nio', 'byd',
+    'xpeng', 'driving', 'motor', 'automotive', 'dealer', 'fleet', 'chassis', 'powertrain'];
   const seen = new Set(excludeUrls);
   return allArticles.filter(a => {
     if (!a.title || a.title === '[Removed]' || !a.description) return false;
     if (seen.has(a.url)) return false;
-    seen.add(a.url); return true;
+    seen.add(a.url);
+    const text = (a.title + ' ' + a.description).toLowerCase();
+    return automotiveKeywords.some(k => text.includes(k));
   }).slice(0, 4).map((a, i) => ({
     region: i < 2 ? 'global' : 'na',
     title: a.title.length > 90 ? a.title.substring(0, 90) + '...' : a.title,
