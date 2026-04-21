@@ -40,6 +40,7 @@ async function fetchSummaryStories(excludeUrls = []) {
     'North America automotive new model launch strategy 2026',
     'automotive software defined vehicle SDV cockpit North America',
     'HMI infotainment display automotive US market supplier',
+    'North America commercial vehicle truck fleet technology 2026',
     'automotive EV platform architecture new car launch 2026',
     'Europe automotive OEM EV SDV cockpit strategy 2026',
     'China EV smart cockpit HMI technology export global'
@@ -52,7 +53,8 @@ async function fetchSummaryStories(excludeUrls = []) {
   const automotiveKeywords = ['car', 'auto', 'vehicle', 'ev', 'electric', 'cockpit',
     'infotainment', 'hmi', 'adas', 'sdv', 'oem', 'toyota', 'ford', 'gm', 'tesla',
     'rivian', 'bmw', 'volkswagen', 'hyundai', 'kia', 'stellantis', 'nio', 'byd',
-    'xpeng', 'driving', 'motor', 'automotive', 'dealer', 'fleet', 'chassis', 'powertrain'];
+    'xpeng', 'driving', 'motor', 'automotive', 'dealer', 'fleet', 'chassis', 'powertrain',
+    'truck', 'commercial vehicle', 'semi', 'freight', 'logistics', 'van', 'pickup'];
   const seen = new Set(excludeUrls);
   return allArticles.filter(a => {
     if (!a.title || a.title === '[Removed]' || !a.description) return false;
@@ -289,11 +291,40 @@ async function saveToFirestore(topStories, summaryStories) {
   console.log(`✅ Saved ${allNews.length} articles to Firestore for ${dateStr}`);
 }
 
+async function fetchRecentUrls() {
+  console.log('Fetching recent 14 days URLs from Firestore...');
+  try {
+    const { token, projectId } = await getFirebaseToken();
+    const recentUrls = new Set();
+    const today = new Date();
+    for (let i = 1; i <= 14; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const ds = d.toISOString().split('T')[0];
+      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/dailyNews/${ds}`;
+      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const values = data.fields?.news?.arrayValue?.values || [];
+      values.forEach(v => {
+        const sourceUrl = v.mapValue?.fields?.sourceUrl?.stringValue;
+        if (sourceUrl) recentUrls.add(sourceUrl);
+      });
+    }
+    console.log(`Found ${recentUrls.size} URLs from past 14 days`);
+    return [...recentUrls];
+  } catch(e) {
+    console.log('Could not fetch recent URLs:', e.message);
+    return [];
+  }
+}
+
 async function main() {
   console.log(`[${dateStr}] Starting Automotive Intelligence Daily...`);
   const topStories = await fetchTopStories();
   console.log(`Top: Global="${topStories.global?.title?.substring(0,40)}" NA="${topStories.na?.title?.substring(0,40)}"`);
-  const excludeUrls = [topStories.global?.sourceUrl, topStories.na?.sourceUrl].filter(Boolean);
+  const recentUrls = await fetchRecentUrls();
+  const excludeUrls = [...recentUrls, topStories.global?.sourceUrl, topStories.na?.sourceUrl].filter(Boolean);
   const summaryStories = await fetchSummaryStories(excludeUrls);
   console.log(`Summaries: ${summaryStories.length}`);
   const html = buildEmailHTML(topStories, summaryStories);
