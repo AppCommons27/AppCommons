@@ -11,9 +11,14 @@ const today = new Date();
 const dateStr = today.toISOString().split('T')[0];
 const dateLabel = today.toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
 
-async function fetchTopStories() {
+async function fetchTopStories(recentTitles = []) {
   console.log('Stage 1: Claude searching for top stories...');
-  const sys = `You are a senior automotive industry analyst focused on Smart Cockpit. Search today (${dateStr}) and find the single most important automotive news for Global and for North America. Return JSON only:
+  const avoidSection = recentTitles.length > 0
+    ? 'IMPORTANT: Do NOT select stories about these topics already covered in the past 14 days:\n' +
+      recentTitles.slice(0,10).map((t,i) => (i+1) + '. ' + t).join('\n') +
+      '\nChoose DIFFERENT stories.'
+    : '';
+  const sys = `You are a senior automotive industry analyst focused on Smart Cockpit. Search today (${dateStr}) and find the single most important automotive news for Global and for North America. ${avoidSection} Return JSON only:
 {"global":{"title":"...","summary":"...","source":"...","sourceUrl":"...","type":"new-car","background":"60-80w","keyPoints":["p1","p2","p3"],"impact":"50-70w","cockpit":"40-60w","tags":["high"]},"na":{"title":"...","summary":"...","source":"...","sourceUrl":"...","type":"new-car","background":"60-80w","keyPoints":["p1","p2","p3"],"impact":"50-70w","cockpit":"40-60w","tags":["high"]}}
 type: new-car/arch/design. tags: high/mid/watch. JSON only.`;
 
@@ -40,7 +45,7 @@ async function fetchSummaryStories(excludeUrls = []) {
     'North America automotive new model launch strategy 2026',
     'automotive software defined vehicle SDV cockpit North America',
     'HMI infotainment display automotive US market supplier',
-    'North America commercial vehicle truck fleet technology 2026',
+    'North America commercial truck market demand freight industry 2026',
     'automotive EV platform architecture new car launch 2026',
     'Europe automotive OEM EV SDV cockpit strategy 2026',
     'China EV smart cockpit HMI technology export global'
@@ -319,9 +324,36 @@ async function fetchRecentUrls() {
   }
 }
 
+async function fetchRecentTitles() {
+  try {
+    const { token, projectId } = await getFirebaseToken();
+    const recentTitles = [];
+    const today = new Date();
+    for (let i = 1; i <= 14; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const ds = d.toISOString().split('T')[0];
+      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/dailyNews/${ds}`;
+      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const values = data.fields?.news?.arrayValue?.values || [];
+      values.forEach(v => {
+        const title = v.mapValue?.fields?.title?.stringValue;
+        if (title) recentTitles.push(title);
+      });
+    }
+    return recentTitles;
+  } catch(e) {
+    console.log('Could not fetch recent titles:', e.message);
+    return [];
+  }
+}
+
 async function main() {
   console.log(`[${dateStr}] Starting Automotive Intelligence Daily...`);
-  const topStories = await fetchTopStories();
+  const recentTitles = await fetchRecentTitles();
+  const topStories = await fetchTopStories(recentTitles);
   console.log(`Top: Global="${topStories.global?.title?.substring(0,40)}" NA="${topStories.na?.title?.substring(0,40)}"`);
   const recentUrls = await fetchRecentUrls();
   const excludeUrls = [...recentUrls, topStories.global?.sourceUrl, topStories.na?.sourceUrl].filter(Boolean);
